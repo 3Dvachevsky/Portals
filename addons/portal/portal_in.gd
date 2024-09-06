@@ -11,12 +11,19 @@ var option_select: int = -1
 var type_shader: int = -1
 var id_node: int = -1
 
-static var editor_interface = Engine.get_singleton("EditorInterface")
+static var editor_interface
 static var shader_editor: Node
 static var shader_graph: GraphEdit
 static var current_vs: VisualShader
 static var portals_in_id: Array[StringName]
 static var count_node_added: int = 0
+
+
+
+func _init() -> void:
+	if Engine.is_editor_hint():
+		if editor_interface == null:
+			editor_interface = Engine.get_singleton("EditorInterface")
 
 
 func set_shader_editor():
@@ -38,7 +45,7 @@ func set_shader_editor():
 		printerr("[Portal Plugin]: No found VisualShaderEditor")
 		return
 	
-	editor_interface.get_base_control().get_tree().create_timer(2).timeout.connect(func(): set_shader_editor_2(), 4)
+	editor_interface.get_base_control().get_tree().process_frame.connect(func(): set_shader_editor_2(), 4)
 
 func set_shader_editor_2():
 	var tab: TabContainer = shader_editor.get_child(1).get_child(1)
@@ -56,39 +63,6 @@ func set_shader_editor_2():
 		shader_changed()
 	else:
 		shader_editor.connect("visibility_changed", shader_changed, 4)
-	
-	
-	var item_list: ItemList = shader_editor.get_child(1).get_child(0).get_child(1)
-	for item_i in item_list.item_count:
-		var vs = load(item_list.get_item_tooltip(item_i))
-		if vs is VisualShader:
-			var graph: GraphEdit = shader_editor.get_child(1).get_child(1).get_child(item_i).get_child(0)
-			var type: int = -1
-			match vs.get_mode():
-				Shader.MODE_SPATIAL, Shader.MODE_CANVAS_ITEM:
-					type = graph.get_menu_hbox().get_child(4).selected
-				Shader.MODE_PARTICLES:
-					var particle_mode: int = graph.get_menu_hbox().get_child(3).selected
-					if particle_mode == 2:
-						type = VisualShader.TYPE_COLLIDE
-					else:
-						if graph.get_menu_hbox().get_child(5).button_pressed:
-							type = particle_mode + 6
-						else:
-							type = particle_mode + 3
-				Shader.MODE_SKY:
-					type = VisualShader.TYPE_SKY
-				Shader.MODE_FOG:
-					type = VisualShader.TYPE_FOG
-			
-			if type == -1:
-				continue
-			
-			for id in vs.get_node_list(type):
-				var node: VisualShaderNode = vs.get_node(type, id)
-				if node is PortalOut:
-					var option_btn: OptionButton = graph.get_node(str(id)).get_child(1).get_child(0).get_child(1)
-					var err = option_btn.emit_signal("item_selected", node.get_option_index(0))
 
 
 
@@ -357,6 +331,12 @@ static func graph_node_added(node: Node, delay: bool = true):
 			node.set_slot_enabled_left(2, false)
 			node.add_theme_stylebox_override("titlebar", PORTAL_STYLE)
 			node.add_theme_stylebox_override("titlebar_selected", PORTAL_SELECT_STYLE)
+			var option_btn: OptionButton = node.get_child(1).get_child(0).get_child(1)
+			if option_btn.item_count > 0:
+				if option_btn.get_item_text(0).is_empty():
+					var err = option_btn.emit_signal("item_selected", option_btn.get_selected_id())
+					if err != OK:
+						printerr("[Portal Plugin] Error emit signal item selected: ", err)
 			
 	count_node_added += 1
 	if count_node_added == (shader_graph.get_child_count() - 1):
